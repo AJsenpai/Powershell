@@ -1,37 +1,53 @@
-# Import the list of servers from a CSV file
-$csvPath = "C:\path\to\your\servers.csv"
-$servers = Import-Csv -Path $csvPath | Select-Object -ExpandProperty ServerName
+# Path to the CSV file containing server names
+$csvPath = "C:\Path\To\Your\servers.csv"
 
 # Specify the name of the service to stop, start, and check status
 $serviceName = "YourServiceName"
 
+# Import the CSV file and get the list of servers
+$servers = Import-Csv -Path $csvPath
+
+# Iterate over each server in the CSV file
 foreach ($server in $servers) {
+    $serverName = $server.ServerName
+
     try {
-        Write-Host "Processing server: $server" -ForegroundColor Cyan
+        Write-Host "Processing server: $serverName" -ForegroundColor Cyan
 
-        # Check if the service exists on the remote server
-        $service = Get-Service -ComputerName $server -Name $serviceName -ErrorAction Stop
+        # Invoke-Command to run commands on the remote server
+        Invoke-Command -ComputerName $serverName -ScriptBlock {
+            param ($serviceName)
 
-        # Stop the service if it's running
-        if ($service.Status -eq 'Running') {
-            Write-Host "Stopping service '$serviceName' on $server..." -ForegroundColor Yellow
-            Stop-Service -ComputerName $server -Name $serviceName -Force -ErrorAction Stop
-        } else {
-            Write-Host "Service '$serviceName' is not running on $server." -ForegroundColor Green
-        }
+            # Try to retrieve the service on the remote server
+            try {
+                $service = Get-Service -Name $serviceName -ErrorAction Stop
+                
+                # If the service is running, stop it
+                if ($service.Status -eq 'Running') {
+                    Write-Host "Stopping service '$serviceName' on $env:COMPUTERNAME..." -ForegroundColor Yellow
+                    Stop-Service -Name $serviceName -Force -ErrorAction Stop
+                } else {
+                    Write-Host "Service '$serviceName' is not running on $env:COMPUTERNAME." -ForegroundColor Green
+                }
 
-        # Start the service
-        Write-Host "Starting service '$serviceName' on $server..." -ForegroundColor Yellow
-        Start-Service -ComputerName $server -Name $serviceName -ErrorAction Stop
+                # Start the service again
+                Write-Host "Starting service '$serviceName' on $env:COMPUTERNAME..." -ForegroundColor Yellow
+                Start-Service -Name $serviceName -ErrorAction Stop
 
-        # Check and display the status of the service after restart
-        $serviceStatus = Get-Service -ComputerName $server -Name $serviceName
-        Write-Host "Service '$serviceName' on $server is now: $($serviceStatus.Status)" -ForegroundColor Green
+                # Check and display the service status
+                $serviceStatus = Get-Service -Name $serviceName
+                Write-Host "Service '$serviceName' on $env:COMPUTERNAME is now: $($serviceStatus.Status)" -ForegroundColor Green
+            }
+            catch {
+                Write-Host "Error managing service '$serviceName' on $env:COMPUTERNAME. Error: $_" -ForegroundColor Red
+            }
+
+        } -ArgumentList $serviceName
     }
     catch {
-        Write-Host "Failed to manage service '$serviceName' on $server. Error: $_" -ForegroundColor Red
+        Write-Host "Failed to connect to $serverName. Error: $_" -ForegroundColor Red
     }
-    
+
     Write-Host "`n-----------------------------------------------`n"
 }
 
