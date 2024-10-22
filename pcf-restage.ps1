@@ -57,6 +57,25 @@ function Get-LatestAppVersion {
     return $latestApps
 }
 
+# Function to check the state of the app after restaging
+function Check-AppState {
+    param (
+        [string]$appName
+    )
+
+    # Get the app state from 'cf app' command
+    $appDetails = cf app $appName
+
+    if ($appDetails -match "state:\s+(\w+)") {
+        $appState = $matches[1]
+        Write-Host "App $appName is in state: $appState"
+        Log-Event "App $appName is in state: $appState"
+    } else {
+        Write-Host "Could not determine the state of app: $appName"
+        Log-Event "Could not determine the state of app: $appName"
+    }
+}
+
 # List to store apps that have already been restaged
 $restagedApps = @()
 
@@ -97,6 +116,9 @@ foreach ($org in $orgs) {
                     Log-Event "Restaging running app: $app"
                     cf restage $app
                     $restagedApps += $app # Add to the list of restaged apps
+                    
+                    # Log the state after restaging
+                    Check-AppState -appName $app
                 }
             }
         }
@@ -111,6 +133,9 @@ foreach ($org in $orgs) {
                     Write-Host "Restaging latest app version: $($app.AppName)"
                     Log-Event "Restaging latest app version: $($app.AppName)"
                     cf restage $app.AppName
+                    
+                    # Log the state after restaging
+                    Check-AppState -appName $app.AppName
                 } else {
                     Write-Host "App $($app.AppName) was already restaged as running. Skipping restage."
                     Log-Event "App $($app.AppName) was already restaged as running. Skipping restage."
@@ -122,3 +147,16 @@ foreach ($org in $orgs) {
 
 Write-Host "Script execution completed. Logs saved to $logFilePath"
 Log-Event "Script execution completed."
+
+# Email the log file
+$to = "recipient@example.com"          # Replace with the recipient's email
+$from = "sender@example.com"           # Replace with the sender's email
+$smtpServer = "smtp.example.com"       # Replace with your SMTP server
+$subject = "PCF App Restage Log"
+$body = "Please find the attached log file for the PCF app restage process."
+$attachment = $logFilePath
+
+Send-MailMessage -To $to -From $from -Subject $subject -Body $body -SmtpServer $smtpServer -Attachments $attachment
+
+Write-Host "Log file emailed to $to"
+Log-Event "Log file emailed to $to"
