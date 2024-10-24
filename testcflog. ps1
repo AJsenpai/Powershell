@@ -1,0 +1,221 @@
+Got it! Here's an updated version of your script that automates the login process for both environments (api-scp2-test-pdv.com and api-scp2-test-bdv.com), runs the restaging tasks, and ensures that all steps are performed in sequence without manual intervention.
+
+Updated PowerShell Script
+
+# Ensure CF CLI is installed and logged in
+if (-not (Get-Command "cf" -ErrorAction SilentlyContinue)) {
+    Write-Host "CF CLI not installed. Please install it first."
+    exit
+}
+
+# Define the log file path
+$logFilePath = "C:/tmp/pcf-restage-log.txt"
+
+# Function to log events to the log file with timestamp
+function Log-Event {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp - $message"
+    
+    # Append to the log file
+    Add-Content -Path $logFilePath -Value $logMessage
+}
+
+# Function to log in to a CF environment
+function CF-Login {
+    param (
+        [string]$apiEndpoint,
+        [string]$username,
+        [string]$password
+    )
+
+    Write-Host "Logging into CF environment: $apiEndpoint"
+    Log-Event "Logging into CF environment: $apiEndpoint"
+    
+    # Perform CF login
+    $loginOutput = cf login -a $apiEndpoint -u $username -p $password -o "your-org" -s "your-space" 2>&1
+    
+    # Log the output of the login command
+    Log-Event "CF login output for $apiEndpoint: $loginOutput"
+    
+    if ($loginOutput -match "API endpoint:") {
+        Write-Host "Successfully logged in to $apiEndpoint"
+    } else {
+        Write-Host "Failed to log in to $apiEndpoint"
+        Log-Event "Failed to log in to $apiEndpoint. Skipping operations."
+        exit
+    }
+}
+
+# Function to get the latest version of an app based on the highest numeric suffix
+function Get-LatestAppVersion {
+    param (
+        [string[]]$appList
+    )
+    
+    # Regex to match app names ending with a number (e.g., AppName__12)
+    $regex = "^(.*)__([0-9]+)$"
+    
+    # Filter the apps that match the pattern and extract the numeric suffix
+    $appsWithVersion = @()
+
+    foreach ($app in $appList) {
+        if ($app -match $regex) {
+            $baseName = $matches[1]
+            $version = [int]$matches[2]
+            $appsWithVersion += [PSCustomObject]@{
+                AppName  = $app
+                BaseName = $baseName
+                Version  = $version
+            }
+        }
+    }
+
+    if ($appsWithVersion.Count -eq 0) {
+        Write-Host "No apps found with numeric suffix."
+        Log-Event "No apps found with numeric suffix in space."
+        return $null
+    }
+
+    # Group by base name and select the app with the highest version number
+    $latestApps = $appsWithVersion | Group-Object -Property BaseName | ForEach-Object {
+        $_.Group | Sort-Object -Property Version -Descending | Select-Object -First 1
+    }
+
+    return $latestApps
+}
+
+# Function to check the state of the app after restaging
+function Check-AppState {
+    param (
+        [string]$appName
+    )
+
+    # Get the app state from 'cf app' command
+    $appDetails = cf app $appName
+
+    if ($appDetails -match "state:\s+(\w+)") {
+        $appState = $matches[1]
+        Write-Host "App $appName is in state: $appState"
+        Log-Event "App $appName is in state: $appState"
+    } else {
+        Write-Host "Could not determine the state of app: $appName"
+        Log-Event "Could not determine the state of app: $appName"
+    }
+}
+
+# Function to restage the app and log the trace of the cf command
+function Restage-App {
+    param (
+        [string]$appName
+    )
+
+    # Run the cf restage command and capture the output
+    Write-Host "Restaging app: $appName"
+    Log-Event "Restaging app: $appName"
+    $restageOutput = cf restage $appName 2>&1
+    
+    # Log the output of the restage command (including any errors)
+    Log-Event "cf restage output for $appName: $restageOutput"
+    
+    # Check the app's state after restaging
+    Check-AppState -appName $appName
+}
+
+# Function to perform restage operations on all apps in the space
+function Restage-AppsInSpace {
+    # Get the list of all apps in the space
+    $apps = cf apps | Select-Object -Skip 4 # Skip the first 4 lines (headers and extra text)
+
+    # List to store apps that have already been restaged
+    $restagedApps = @()
+
+    # Restage any app that is already running
+    foreach ($app in $apps) {
+        # Check the app state
+        $appDetails = cf app $app
+        if ($appDetails -match "state:\s+RUNNING") {
+            if ($restagedApps -notcontains $app) {
+                # Restage the running app and log details
+                Restage-App -appName $app
+                $restagedApps += $app # Add to the list of restaged apps
+            }
+        }
+    }
+
+    # Find the latest version for each app group
+    $latestApps = Get-LatestAppVersion -appList $apps
+
+    if ($latestApps) {
+        foreach ($app in $latestApps) {
+            # Skip restaging if the app was already restaged in the "running app" check
+            if ($restagedApps -notcontains $app.AppName) {
+                # Restage the latest version of the app and log details
+                Restage-App -appName $app.AppName
+            } else {
+                Write-Host "App $($app.AppName) was already restaged as running. Skipping restage."
+                Log-Event "App $($app.AppName) was already restaged as running. Skipping restage."
+            }
+        }
+    }
+}
+
+# Main function to execute the task across both environments
+function Main-Task {
+    # Define API endpoints and credentials
+    $environments = @(
+        @{ API = "https://api-scp2-test-pdv.com"; Username = "your-username"; Password = "your-password" },
+        @{ API = "https://api-scp2-test-bdv.com"; Username = "your-username"; Password = "your-password" }
+    )
+
+    foreach ($env in $environments) {
+        # Log into each environment
+        CF-Login -apiEndpoint $env.API -username $env.Username -password $env.Password
+
+        # Perform the restage operations in each space for the current environment
+        Restage-AppsInSpace
+    }
+}
+
+# Run the main task
+Main-Task
+
+Write-Host "Script execution completed. Logs saved to $logFilePath"
+Log-Event "Script execution completed."
+
+# Email the log file
+$to = "recipient@example.com"          # Replace with the recipient's email
+$from = "sender@example.com"           # Replace with the sender's email
+$smtpServer = "smtp.example.com"       # Replace with your SMTP server
+$subject = "PCF App Restage Log"
+$body = "Please find the attached log file for the PCF app restage process."
+$attachment = $logFilePath
+
+Send-MailMessage -To $to -From $from -Subject $subject -Body $body -SmtpServer $smtpServer -Attachments $attachment
+
+Write-Host "Log file emailed to $to"
+Log-Event "Log file emailed to $to"
+
+Key Changes:
+
+1. CF-Login Function: Automates the cf login command for each environment.
+
+
+2. Main Task Loop: The script now loops over each environment, logs in, and performs the app restaging operations.
+
+
+3. Restage-AppsInSpace Function: Runs the core restaging logic for each environment and space.
+
+
+
+To Customize:
+
+Replace "your-username" and "your-password" with actual credentials for the environments.
+
+Ensure that "your-org" and "your-space" match the organization and space names in the cf login command, or pass them as parameters if they differ per environment.
+
+
+Now this script automates login to both environments and performs the app restage task across multiple environments without manual intervention.
+
