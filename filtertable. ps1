@@ -1,0 +1,72 @@
+# Define the output HTML file
+$outputFile = "C:\inetpub\wwwroot\PCF_Apps_Report.html"
+
+# Get the current date and time for the "last updated" timestamp
+$lastUpdated = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+
+# Initialize HTML content with filtering functionality and "last updated" tag
+$htmlContent = @"
+<html>
+<head>
+    <title>PCF Apps Report</title>
+    <style>
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 4px; text-align: left; border: 1px solid #ddd; }
+        th { background-color: #f2f2f2; }
+        .last-updated { font-size: 0.9em; color: #888; margin-bottom: 10px; }
+    </style>
+    <script>
+        function filterTable() {
+            var input, filter, table, tr, td, i, j, txtValue;
+            input = document.getElementById('tableFilter');
+            filter = input.value.toUpperCase();
+            table = document.getElementById('appsTable');
+            tr = table.getElementsByTagName('tr');
+
+            for (i = 1; i < tr.length; i++) {
+                tr[i].style.display = 'none';
+                td = tr[i].getElementsByTagName('td');
+                for (j = 0; j < td.length; j++) {
+                    if (td[j]) {
+                        txtValue = td[j].textContent || td[j].innerText;
+                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                            tr[i].style.display = '';
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>PCF Apps Report</h1>
+    <div class="last-updated">Last Updated: $lastUpdated</div>
+    <input type="text" id="tableFilter" onkeyup="filterTable()" placeholder="Search for apps, orgs, or spaces..." style="margin-bottom: 10px; width: 100%; padding: 5px;">
+    <table id="appsTable">
+        <tr>
+            <th>Organization</th>
+            <th>Space</th>
+            <th>App Name</th>
+            <th>Status</th>
+            <th>Memory Usage (MB)</th>
+            <th>CPU Usage (%)</th>
+            <th>Disk Usage (MB)</th>
+            <th>Uptime (hh:mm:ss)</th>
+            <th>Routes</th>
+        </tr>
+"@
+
+# [The rest of your script goes here, which populates the table rows with data]
+
+# Complete the HTML content
+$htmlContent += @"
+    </table>
+</body>
+</html>
+"@
+
+# Write to output file
+Set-Content -Path $outputFile -Value $htmlContent
+
+Write-Output "Report generated: $outputFile"
