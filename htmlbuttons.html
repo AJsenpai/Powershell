@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthy or Unhealthy Button</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* General button style */
+        .button {
+            padding: 15px 30px;
+            font-size: 18px;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        /* Green for "Healthy" button */
+        .button.healthy {
+            background-color: #28a745;
+        }
+
+        .button.healthy:hover {
+            background-color: #218838;
+            transform: scale(1.05);
+        }
+
+        /* Red for "Unhealthy" button */
+        .button.unhealthy {
+            background-color: #dc3545;
+        }
+
+        .button.unhealthy:hover {
+            background-color: #c82333;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Button for Healthy -->
+    <a href="https://www.google.com" target="_blank" class="button healthy" title="https://www.google.com">Healthy</a>
+
+    <!-- Button for Unhealthy -->
+    <a href="https://www.google.com" target="_blank" class="button unhealthy" title="https://www.google.com">Unhealthy</a>
+
+</body>
+</html>
