@@ -1,51 +1,57 @@
-# Define the list of servers
-$servers = @("Server1", "Server2", "Server3") # Replace with your server names or IPs
+# Define the list of Windows servers
+$servers = @("Server1", "Server2", "Server3") # Replace with your server names
 
-# Define a script block to run on each server
-$scriptBlock = {
-    # Run the dspmqver command and capture its output
-    $dspmqverOutput = dspmqver
+# Output file to save the results
+$outputFile = "C:\Temp\MQ_Version_Report.csv"
 
-    # Define a hashtable to store the extracted information
-    $info = @{
-        Version = ""
-        OS = ""
-    }
-
-    # Parse each line of the output
-    foreach ($line in $dspmqverOutput) {
-        if ($line -match "^Version\s+:\s+(.*)") {
-            $info.Version = $matches[1].Trim()
-        }
-        elseif ($line -match "^O/S\s+:\s+(.*)") {
-            $info.OS = $matches[1].Trim()
-        }
-    }
-
-    # Return the extracted information
-    [PSCustomObject]@{
-        ServerName = $env:COMPUTERNAME # Capture the server name
-        Version    = $info.Version
-        OS         = $info.OS
-    }
-}
-
-# Run the script block on each server
+# Initialize the output array
 $results = @()
+
+# Iterate through each server
 foreach ($server in $servers) {
     try {
-        $output = Invoke-Command -ComputerName $server -ScriptBlock $scriptBlock -ErrorAction Stop
-        $results += $output
-    }
-    catch {
-        Write-Warning "Failed to connect to $server: $_"
+        # Test connectivity to the server
+        if (Test-Connection -ComputerName $server -Count 1 -Quiet) {
+            Write-Host "Connecting to $server..."
+
+            # Get the OS version
+            $osVersion = Invoke-Command -ComputerName $server -ScriptBlock {
+                (Get-CimInstance Win32_OperatingSystem).Caption
+            } -ErrorAction Stop
+
+            # Get the MQ version using dspmqver
+            $mqVersion = Invoke-Command -ComputerName $server -ScriptBlock {
+                dspmqver | Select-String -Pattern "Version"
+            } -ErrorAction Stop
+
+            # Parse the MQ version from dspmqver output
+            $mqVersion = $mqVersion -replace ".*Version:\s*", ""
+
+            # Append results to the array
+            $results += [PSCustomObject]@{
+                ServerName = $server
+                OSVersion  = $osVersion
+                MQVersion  = $mqVersion
+            }
+        } else {
+            Write-Host "Unable to reach $server." -ForegroundColor Yellow
+            $results += [PSCustomObject]@{
+                ServerName = $server
+                OSVersion  = "N/A"
+                MQVersion  = "N/A"
+            }
+        }
+    } catch {
+        Write-Host "Error connecting to $server: $_" -ForegroundColor Red
         $results += [PSCustomObject]@{
             ServerName = $server
-            Version    = "Error"
-            OS         = "Error"
+            OSVersion  = "Error"
+            MQVersion  = "Error"
         }
     }
 }
 
-# Output the results
-$results | Format-Table -AutoSize
+# Export the results to a CSV file
+$results | Export-Csv -Path $outputFile -NoTypeInformation -Encoding UTF8
+
+Write-Host "Report saved to $outputFile"
