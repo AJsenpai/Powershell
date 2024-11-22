@@ -16,18 +16,21 @@ foreach ($Server in $ServerList) {
             Get-WmiObject -Class Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
         }
 
-        # Fetch IBM MQ Version (if installed)
+        # Fetch IBM MQ Version using dspmqver
         $MQVersion = Invoke-Command -ComputerName $Server -Credential $Credential -ScriptBlock {
             try {
-                # Registry path for IBM MQ
-                $RegistryPath = "HKLM:\SOFTWARE\IBM\WebSphere MQ"
-                if (Test-Path $RegistryPath) {
-                    Get-ItemProperty -Path $RegistryPath | Select-Object -ExpandProperty Version
+                # Check if dspmqver exists
+                if (Get-Command -Name "dspmqver" -ErrorAction SilentlyContinue) {
+                    dspmqver | ForEach-Object {
+                        # Extract version from dspmqver output
+                        $_ -match "Version: ([\d\.]+)" | Out-Null
+                        $Matches[1]
+                    }
                 } else {
-                    "Not Installed"
+                    "dspmqver Command Not Found"
                 }
             } catch {
-                "Error Fetching MQ Version"
+                "Error Executing dspmqver"
             }
         }
 
@@ -37,7 +40,7 @@ foreach ($Server in $ServerList) {
             OSName     = $OSDetails.Caption
             OSVersion  = $OSDetails.Version
             OSArch     = $OSDetails.OSArchitecture
-            MQVersion  = $MQVersion
+            MQVersion  = if ($MQVersion -is [Array]) { $MQVersion -join ", " } else { $MQVersion }
         }
 
         # Add result to the results array
