@@ -18,10 +18,14 @@ foreach ($server in $servers) {
     Write-Host "Pinging $server..." -ForegroundColor Green
 
     try {
-        $ping = Test-Connection -ComputerName $server -Count 4 -ErrorAction Stop
+        # Perform the ping and store results
+        $pingResults = Test-Connection -ComputerName $server -Count 4 -ErrorAction Stop
+
+        # Calculate average response time
+        $avgResponseTime = ($pingResults | Measure-Object -Property ResponseTime -Average).Average
 
         # Record success
-        $successMessage = "SUCCESS: $server is reachable. Avg Response Time: $($ping.ResponseTime | Measure-Object -Average).Average ms"
+        $successMessage = "SUCCESS: $server is reachable. Avg Response Time: $([math]::Round($avgResponseTime, 2)) ms"
         Write-Host $successMessage -ForegroundColor Cyan
         Add-Content -Path $outputFile -Value $successMessage
     } catch {
