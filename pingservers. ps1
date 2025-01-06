@@ -1,0 +1,35 @@
+# Define the list of servers to ping
+$servers = @(
+    "server1.domain.com",
+    "server2.domain.com",
+    "192.168.1.1",
+    "google.com"
+)
+
+# Define the output file
+$outputFile = "PingResults.txt"
+
+# Initialize the output file
+"Ping Results (`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`)" | Out-File -FilePath $outputFile -Encoding utf8
+Add-Content -Path $outputFile -Value "--------------------------------------"
+
+# Loop through each server and ping
+foreach ($server in $servers) {
+    Write-Host "Pinging $server..." -ForegroundColor Green
+
+    try {
+        $ping = Test-Connection -ComputerName $server -Count 4 -ErrorAction Stop
+
+        # Record success
+        $successMessage = "SUCCESS: $server is reachable. Avg Response Time: $($ping.ResponseTime | Measure-Object -Average).Average ms"
+        Write-Host $successMessage -ForegroundColor Cyan
+        Add-Content -Path $outputFile -Value $successMessage
+    } catch {
+        # Record failure
+        $errorMessage = "FAILURE: Unable to reach $server. Error: $_"
+        Write-Host $errorMessage -ForegroundColor Red
+        Add-Content -Path $outputFile -Value $errorMessage
+    }
+}
+
+Write-Host "Ping results saved to $outputFile" -ForegroundColor Yellow
